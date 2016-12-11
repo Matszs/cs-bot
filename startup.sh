@@ -1,3 +1,3 @@
 #! /bin/sh
 
-python ./bot/suusbot.py > /dev/null &
+python ./suusbot.py > /dev/null &
