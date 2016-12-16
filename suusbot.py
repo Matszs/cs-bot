@@ -1,6 +1,7 @@
 import telepot
 import time
 from firebase import firebase
+import threading
 
 APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs"
 FIREBASE_DB = "https://suus-bot.firebaseio.com/"
@@ -36,8 +37,6 @@ def message_reveiver(msg):
 		return
 
 	#TODO: Send message to AI
-
-
 
 def company_by_user(user):
 	companies = db.get('companies', None)
@@ -112,12 +111,27 @@ def start_conversation(type, msg, user):
 			time.sleep(2)
 			bot.sendMessage(msg['chat']['id'], "We gaan een vergaderruimte reserveren. Om dit te doen type je: \n\n Ik wil graag een vergaderruimte reserveren \n- of - \n Ik wil graag een vergaderruimte voor morgen", parse_mode="HTML")
 
+		if user['state'] == STATES.TUTORIAL:
+			print("TUTORIAL FASE 2")
+			#todo: get msg[text]
+			#todo: send to AI
+			#todo: check if action is 'reserveren'
+			#todo: If so, put state to default or if you want to have more tutorial steps you have to create different states (STATES.TUTORIAL_1, STATES.TUTORIAL_2, etc...)
+
+def timelyEvents():
+
+	while True:
+
+		#todo: search if reservation has ended, + 30 minutes, send message and ask for feedback, save feedback to database
+
+		print("> TimeEvents Trigger")
+
+		time.sleep(60)
 
 
-
-
-
-
+t = threading.Thread(target=timelyEvents)
+t.daemon = True
+t.start()
 
 bot = telepot.Bot(APITOKEN)
 bot.message_loop(message_reveiver)
