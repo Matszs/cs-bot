@@ -4,9 +4,11 @@ from firebase import firebase
 import threading
 import apiai
 import json
+import datetime
 
 APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs"
-AI_CLIENT_ACCESS_TOKEN = "900740f8620f4a9897fad1adc5b8c7dc"
+#AI_CLIENT_ACCESS_TOKEN = "900740f8620f4a9897fad1adc5b8c7dc"
+AI_CLIENT_ACCESS_TOKEN = "361e9de139384db99766aff1a4687b12"
 FIREBASE_DB = "https://suus-bot.firebaseio.com/"
 
 class STATES:
@@ -140,12 +142,43 @@ def ai_request(user, text):
 	return json.loads(request.getresponse().read().decode('utf_8'))
 def ai_request_handler(request):
 	# todo: get action, params and extract everything, making sure json is always the same
-	return request
+
+	#print(request) # DEBUG
+
+	returnValue = {'action': None, 'message': '', 'params': []}
+
+	if request['status']['code'] == 200:
+		returnValue['action'] = request['result']['action']
+		if 0 in request['result']['fulfillment']['messages']:
+			returnValue['message'] = request['result']['fulfillment']['messages'][0]['speech']
+		else:
+			returnValue['message'] = request['result']['fulfillment']['speech']
+		returnValue['params'] = request['result']['parameters']
+
+	return returnValue
 def ai_handler(user, msg):
 	request = ai_request(user, msg['text'])
 	formatted = ai_request_handler(request)
 	# todo: switch/if/.. based on formatted data, check actions and perform actions.
 	print(formatted)
+
+	bot.sendMessage(msg['chat']['id'], formatted['message'])
+	print(formatted['action'])
+
+	if formatted['action'] == "Reserveren":
+		start_time = None
+		end_time = None
+
+		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '':
+			start_time = formatted['params']['begin_tijd']
+		if 'eind_tijd' in formatted['params'] and formatted['params']['eind_tijd'] is not '':
+			end_time = formatted['params']['eind_tijd']
+
+		if start_time is not None and end_time is not None:
+			date = datetime.datetime.now()
+			db.post('reserveringen', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': str(date)})
+
+
 
 
 def main():
@@ -159,6 +192,7 @@ def main():
 	ai = apiai.ApiAI(AI_CLIENT_ACCESS_TOKEN)
 
 	# start listening for data of Telegram
+	global bot
 	bot = telepot.Bot(APITOKEN)
 	bot.message_loop(message_reveiver)
 
