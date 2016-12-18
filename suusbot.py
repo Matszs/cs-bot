@@ -2,8 +2,11 @@ import telepot
 import time
 from firebase import firebase
 import threading
+import apiai
+import json
 
 APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs"
+AI_CLIENT_ACCESS_TOKEN = "900740f8620f4a9897fad1adc5b8c7dc"
 FIREBASE_DB = "https://suus-bot.firebaseio.com/"
 
 class STATES:
@@ -37,6 +40,7 @@ def message_reveiver(msg):
 		return
 
 	#TODO: Send message to AI
+	ai_handler(user, msg)
 
 def company_by_user(user):
 	companies = db.get('companies', None)
@@ -128,13 +132,38 @@ def timelyEvents():
 
 		time.sleep(60)
 
+def ai_request(user, text):
+	request = ai.text_request()
+	request.lang = 'nl'
+	request.session_id = user['id']
+	request.query = text
+	return json.loads(request.getresponse().read().decode('utf_8'))
+def ai_request_handler(request):
+	# todo: get action, params and extract everything, making sure json is always the same
+	return request
+def ai_handler(user, msg):
+	request = ai_request(user, msg['text'])
+	formatted = ai_request_handler(request)
+	# todo: switch/if/.. based on formatted data, check actions and perform actions.
+	print(formatted)
 
-t = threading.Thread(target=timelyEvents)
-t.daemon = True
-t.start()
 
-bot = telepot.Bot(APITOKEN)
-bot.message_loop(message_reveiver)
+def main():
+	# start timely-events
+	t = threading.Thread(target=timelyEvents)
+	t.daemon = True
+	t.start()
 
-while 1:
-	time.sleep(10)
+	#init AI
+	global ai
+	ai = apiai.ApiAI(AI_CLIENT_ACCESS_TOKEN)
+
+	# start listening for data of Telegram
+	bot = telepot.Bot(APITOKEN)
+	bot.message_loop(message_reveiver)
+
+	while 1:
+		time.sleep(10)
+
+if __name__ == '__main__':
+	main()
