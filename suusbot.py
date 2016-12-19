@@ -41,8 +41,7 @@ def message_reveiver(msg):
 		start_conversation('TUTORIAL', msg, user)
 		return
 
-	#TODO: Send message to AI
-	ai_handler(user, msg)
+	ai_handler(user, company, msg)
 
 def company_by_user(user):
 	companies = db.get('companies', None)
@@ -73,6 +72,51 @@ def get_company_by_code(code):
 			return companies[companyName]
 
 	return False
+def get_reservations():
+	reservations = {}
+	companies = db.get('companies', None)
+
+	for companyId in companies:
+		company = companies[companyId]
+
+		if 'reservations' in company:
+			for reservationId in company['reservations']:
+				reservations[reservationId] = {'reservation': company['reservations'][reservationId], 'company': company}
+
+	return reservations
+def notify_starting_reservations():
+	reservations = get_reservations()
+
+	for reservationId in reservations:
+		reservation = reservations[reservationId]
+
+		if reservation['reservation']['reminder_sent']:
+			break
+
+		dateFormatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
+
+		if dateFormatted.date() == datetime.date.today(): # check if reservations is for today
+
+			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S') - datetime.timedelta(minutes=30)
+			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
+
+			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
+
+			if (datetime.datetime.now().hour == startTimeMargeStart.hour and datetime.datetime.now().minute >= startTimeMargeStart.minute) or (datetime.datetime.now().hour == startTimeMargeEnd.hour and datetime.datetime.now().minute <= startTimeMargeEnd.minute):
+
+				startHours = startTime.hour
+				startMinutes = startTime.minute
+
+				if startHours < 10:
+					startHours = '0' + str(startHours)
+
+				if startMinutes < 10:
+					startMinutes = '0' + str(startMinutes)
+
+				bot.sendMessage(reservation['reservation']['chat_id'], "Uw afspraak begint zometeen om " + str(startHours) + ":" + str(startMinutes) + ", gaat deze afspraak nog door?")
+				db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'reminder_sent', 1)
+				print("reminder sent")
+
 
 def start_conversation(type, msg, user):
 
@@ -131,6 +175,7 @@ def timelyEvents():
 		#todo: search if reservation has ended, + 30 minutes, send message and ask for feedback, save feedback to database
 
 		print("> TimeEvents Trigger")
+		notify_starting_reservations()
 
 		time.sleep(60)
 
@@ -156,7 +201,7 @@ def ai_request_handler(request):
 		returnValue['params'] = request['result']['parameters']
 
 	return returnValue
-def ai_handler(user, msg):
+def ai_handler(user, company, msg):
 	request = ai_request(user, msg['text'])
 	formatted = ai_request_handler(request)
 	# todo: switch/if/.. based on formatted data, check actions and perform actions.
@@ -169,17 +214,14 @@ def ai_handler(user, msg):
 		start_time = None
 		end_time = None
 
-		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '':
+		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '' and formatted['params']['begin_tijd']:
 			start_time = formatted['params']['begin_tijd']
-		if 'eind_tijd' in formatted['params'] and formatted['params']['eind_tijd'] is not '':
+		if 'eind_tijd' in formatted['params'] and formatted['params']['eind_tijd'] is not '' and formatted['params']['eind_tijd']:
 			end_time = formatted['params']['eind_tijd']
 
 		if start_time is not None and end_time is not None:
 			date = datetime.datetime.now()
-			db.post('reserveringen', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': str(date)})
-
-
-
+			db.post('companies/' + company['id'] + '/reservations', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': time.strftime('%Y-%m-%d'), 'created': str(date), 'chat_id': msg['chat']['id'], 'reminder_sent': 0, 'feedback_sent': 0})
 
 def main():
 	# start timely-events
