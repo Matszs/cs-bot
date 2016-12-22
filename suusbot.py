@@ -83,7 +83,6 @@ def get_reservations():
 				reservations[reservationId] = {'reservation': company['reservations'][reservationId], 'company': company}
 
 	return reservations
-
 def save_conversation(chat_id, msg):
 	conversation = {'chat_id': chat_id}
 	conversation['chat'] = msg['chat']
@@ -91,7 +90,6 @@ def save_conversation(chat_id, msg):
 
 	conversationDb = db.put('conversations', str(chat_id), conversation)
 	return conversationDb
-
 def get_conversation(chat_id, include_messages = False):
 	conversationDb = db.get('conversations', str(chat_id))
 
@@ -102,45 +100,6 @@ def get_conversation(chat_id, include_messages = False):
 		conversationDb['messages'] = []
 
 	return conversationDb
-
-
-def notify_starting_reservations():
-	reservations = get_reservations()
-
-	for reservationId in reservations:
-		reservation = reservations[reservationId]
-
-		if reservation['reservation']['reminder_sent']:
-			continue
-
-		dateFormatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
-
-		if dateFormatted.date() == datetime.date.today(): # check if reservations is for today
-
-			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S') - datetime.timedelta(minutes=30)
-			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
-
-			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
-
-
-			if (datetime.datetime.now().hour == startTimeMargeStart.hour and datetime.datetime.now().minute >= startTimeMargeStart.minute) or (datetime.datetime.now().hour == startTimeMargeEnd.hour and datetime.datetime.now().minute <= startTimeMargeEnd.minute):
-
-				startHours = startTime.hour
-				startMinutes = startTime.minute
-
-				if startHours < 10:
-					startHours = '0' + str(startHours)
-
-				if startMinutes < 10:
-					startMinutes = '0' + str(startMinutes)
-
-				bot.sendMessage(reservation['reservation']['chat_id'], "Uw afspraak begint zometeen om " + str(startHours) + ":" + str(startMinutes) + ", gaat deze afspraak nog door?")
-				db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'reminder_sent', 1)
-
-				conversation = get_conversation(reservation['reservation']['chat_id'])
-				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'confirm_reservation', 'reservation_id': reservationId, 'company': reservation['company']})
-
-				print("reminder sent")
 
 def start_conversation(type, msg, user, conversation):
 
@@ -192,24 +151,12 @@ def start_conversation(type, msg, user, conversation):
 			#todo: check if action is 'reserveren'
 			#todo: If so, put state to default or if you want to have more tutorial steps you have to create different states (STATES.TUTORIAL_1, STATES.TUTORIAL_2, etc...)
 
-def timely_events():
-
-	while True:
-
-		#todo: search if reservation has ended, + 30 minutes, send message and ask for feedback, save feedback to database
-
-		print("> TimeEvents Trigger")
-		notify_starting_reservations()
-
-		time.sleep(60)
-
-def ai_request(user, text):
+def ai_request(conversation, text):
 	request = ai.text_request()
 	request.lang = 'nl'
-	request.session_id = user['id']
+	request.session_id = conversation['chat_id']
 	request.query = text
 	return json.loads(request.getresponse().read().decode('utf_8'))
-
 def ai_request_handler(request):
 	# todo: get action, params and extract everything, making sure json is always the same
 
@@ -226,13 +173,29 @@ def ai_request_handler(request):
 		returnValue['params'] = request['result']['parameters']
 
 	return returnValue
-
 def ai_handler(user, company, msg, conversation):
-	request = ai_request(user, msg['text'])
+
+	if 'last_data' in conversation:
+		if 'type' in conversation['last_data']:
+			if conversation['last_data']['type'] == 'feedback':
+
+				if 'first_message_time' in conversation['last_data']:
+					message_time = datetime.datetime.strptime(conversation['last_data']['first_message_time'], '%Y-%m-%d %H:%M:%S')
+
+					if datetime.datetime.time() > (message_time.time() + 30):
+						print("STOP FEEDBACK")
+
+
+
+
+
+
+
+	request = ai_request(conversation, msg['text'])
 	formatted = ai_request_handler(request)
-	# todo: switch/if/.. based on formatted data, check actions and perform actions.
 	print(formatted)
 	postMessage = True
+
 
 	if formatted['action'] == "Reserveren":
 		start_time = None
@@ -282,12 +245,80 @@ def ai_handler(user, company, msg, conversation):
 	if formatted['message'] != "" and postMessage:
 		bot.sendMessage(msg['chat']['id'], formatted['message'])
 
+def notify_starting_reservations():
+	reservations = get_reservations()
+
+	for reservationId in reservations:
+		reservation = reservations[reservationId]
+
+		if reservation['reservation']['reminder_sent']:
+			continue
+
+		dateFormatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
+
+		if dateFormatted.date() == datetime.date.today(): # check if reservations is for today
+
+			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S') - datetime.timedelta(minutes=30)
+			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
+
+			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
 
 
+			if (datetime.datetime.now().hour == startTimeMargeStart.hour and datetime.datetime.now().minute >= startTimeMargeStart.minute) or (datetime.datetime.now().hour == startTimeMargeEnd.hour and datetime.datetime.now().minute <= startTimeMargeEnd.minute):
 
+				startHours = startTime.hour
+				startMinutes = startTime.minute
 
+				if startHours < 10:
+					startHours = '0' + str(startHours)
 
+				if startMinutes < 10:
+					startMinutes = '0' + str(startMinutes)
 
+				bot.sendMessage(reservation['reservation']['chat_id'], "Uw afspraak begint zometeen om " + str(startHours) + ":" + str(startMinutes) + ", gaat deze afspraak nog door?")
+				db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'reminder_sent', 1)
+
+				conversation = get_conversation(reservation['reservation']['chat_id'])
+				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'confirm_reservation', 'reservation_id': reservationId, 'company': reservation['company']})
+
+				print("reminder sent")
+def notify_feedback_reservations():
+	reservations = get_reservations()
+
+	for reservationId in reservations:
+		reservation = reservations[reservationId]
+
+		if 'feedback_sent' in reservation['reservation']:
+			if reservation['reservation']['feedback_sent']:
+				continue
+
+			date_formatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
+
+			if date_formatted.date() == datetime.date.today(): # yes if the reservations ends 00:00 it won't work
+
+				end_time_offset = datetime.datetime.strptime(reservation['reservation']['end_time'], '%H:%M:%S') + datetime.timedelta(minutes=30)
+
+				nowTime = datetime.datetime.now().hour * 60 + datetime.datetime.now().minute
+				reservationTime = end_time_offset.hour * 60 + end_time_offset.minute
+
+				if nowTime >= reservationTime:
+					bot.sendMessage(reservation['reservation']['chat_id'], "U heeft zojuist gebruik gemaakt van een ruimte, hoe is deze u bevallen?")
+					db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'feedback_sent', 1)
+
+					conversation = get_conversation(reservation['reservation']['chat_id'])
+					db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'feedback', 'reservation_id': reservationId, 'company': reservation['company']})
+
+def timely_events():
+
+	while True:
+
+		#todo: search if reservation has ended, + 30 minutes, send message and ask for feedback, save feedback to database
+
+		print("> TimeEvents Trigger")
+		notify_starting_reservations()
+		notify_feedback_reservations()
+
+		time.sleep(60)
 
 def main():
 	# start timely-events
