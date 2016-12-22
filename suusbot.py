@@ -173,8 +173,11 @@ def ai_request_handler(request):
 		returnValue['params'] = request['result']['parameters']
 
 	return returnValue
-def ai_handler(user, company, msg, conversation):
 
+def save_feedback_message(user, company, msg, conversation):
+	db.post('companies/' + conversation['last_data']['company']['id'] + '/reservations/' + str(conversation['last_data']['reservation_id']) + '/feedback', msg)
+
+def ai_handler(user, company, msg, conversation):
 	if 'last_data' in conversation:
 		if 'type' in conversation['last_data']:
 			if conversation['last_data']['type'] == 'feedback':
@@ -182,13 +185,20 @@ def ai_handler(user, company, msg, conversation):
 				if 'first_message_time' in conversation['last_data']:
 					message_time = datetime.datetime.strptime(conversation['last_data']['first_message_time'], '%Y-%m-%d %H:%M:%S')
 
-					if datetime.datetime.time() > (message_time.time() + 30):
+					if datetime.datetime.now().time() > (message_time + datetime.timedelta(seconds=30)).time():
+						db.delete('/conversations/' + str(conversation['chat_id']), 'last_data')  # delete last_data after processing
+						save_feedback_message(user, company, msg, conversation)
+						bot.sendMessage(msg['chat']['id'], "Bedankt voor uw feedback.")
 						print("STOP FEEDBACK")
-
-
-
-
-
+						return
+					else:
+						db.put('/conversations/' + str(conversation['chat_id']) + '/last_data', 'first_message_time', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+						save_feedback_message(user, company, msg, conversation)
+						return
+				else:
+					db.put('/conversations/' + str(conversation['chat_id']) + '/last_data', 'first_message_time', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+					save_feedback_message(user, company, msg, conversation)
+					return
 
 
 	request = ai_request(conversation, msg['text'])
@@ -308,6 +318,25 @@ def notify_feedback_reservations():
 					conversation = get_conversation(reservation['reservation']['chat_id'])
 					db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'feedback', 'reservation_id': reservationId, 'company': reservation['company']})
 
+def get_conversations():
+	return db.get('conversations', None)
+
+def notify_feedback_ended():
+	conversations = get_conversations()
+
+	for conversation_id in conversations:
+		conversation = conversations[conversation_id]
+		if 'last_data' in conversation:
+			if 'type' in conversation['last_data']:
+				if conversation['last_data']['type'] == 'feedback':
+					if 'first_message_time' in conversation['last_data']:
+						message_time = datetime.datetime.strptime(conversation['last_data']['first_message_time'], '%Y-%m-%d %H:%M:%S')
+
+						if datetime.datetime.now().time() > (message_time + datetime.timedelta(seconds=30)).time():
+							db.delete('/conversations/' + str(conversation['chat_id']), 'last_data')  # delete last_data after processing
+							bot.sendMessage(conversation['chat_id'], "Bedankt voor uw feedback.")
+							print("STOP FEEDBACK")
+
 def timely_events():
 
 	while True:
@@ -317,6 +346,7 @@ def timely_events():
 		print("> TimeEvents Trigger")
 		notify_starting_reservations()
 		notify_feedback_reservations()
+		notify_feedback_ended()
 
 		time.sleep(60)
 
