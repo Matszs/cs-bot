@@ -341,7 +341,7 @@ def timely_events():
 
 	while True:
 
-		#todo: search if reservation has ended, + 30 minutes, send message and ask for feedback, save feedback to database
+		#todo: if reservation is canceled, stop asking for feedback
 
 		print("> TimeEvents Trigger")
 		notify_starting_reservations()
