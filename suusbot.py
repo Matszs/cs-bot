@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import telepot
 import time
 from firebase import firebase
