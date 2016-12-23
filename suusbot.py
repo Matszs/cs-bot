@@ -87,7 +87,7 @@ def get_reservations():
 def save_conversation(chat_id, msg):
 	conversation = {'chat_id': chat_id}
 	conversation['chat'] = msg['chat']
-	conversation['state'] = STATES.DEFAULT
+	conversation['state'] = STATES.NEW_USER
 
 	conversationDb = db.put('conversations', str(chat_id), conversation)
 	return conversationDb
