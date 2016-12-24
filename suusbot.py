@@ -146,6 +146,20 @@ def start_conversation(type, msg, user, conversation):
 			bot.sendMessage(msg['chat']['id'], "We gaan een vergaderruimte reserveren. Om dit te doen type je: \n\n Ik wil graag een vergaderruimte reserveren \n- of - \n Ik wil graag een vergaderruimte voor morgen", parse_mode="HTML")
 
 		if conversation['state'] == STATES.TUTORIAL:
+
+
+			request = ai_request(conversation, msg['text'])
+			formatted = ai_request_handler(request)
+
+			if formatted['action'] == "Reserveren":
+				bot.sendMessage(msg['chat']['id'], "Ja goed gedaan! Het is je nu gelukt om een reservering te maken. Je bent klaar met de tutorial.")
+				time.sleep(1)
+				bot.sendMessage(msg['chat']['id'], "Je kunt nu aan de slag.")
+
+				db.put('conversations/' + str(conversation['chat_id']), 'state', STATES.DEFAULT)
+				conversation['state'] = STATES.DEFAULT
+
+
 			print("TUTORIAL FASE 2")
 			#todo: get msg[text]
 			#todo: send to AI
