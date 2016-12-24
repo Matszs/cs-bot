@@ -38,7 +38,7 @@ def message_reveiver(msg):
 		start_conversation('NO_COMPANY', msg, user, conversation)
 		return
 
-	if user['state'] == STATES.TUTORIAL:
+	if conversation['state'] == STATES.TUTORIAL:
 		start_conversation('TUTORIAL', msg, user, conversation)
 		return
 
