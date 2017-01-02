@@ -6,8 +6,9 @@ import threading
 import apiai
 import json
 import datetime
+import random
 
-APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs"
+APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs" # Telegram token
 #AI_CLIENT_ACCESS_TOKEN = "900740f8620f4a9897fad1adc5b8c7dc"
 AI_CLIENT_ACCESS_TOKEN = "361e9de139384db99766aff1a4687b12"
 FIREBASE_DB = "https://suus-bot.firebaseio.com/"
@@ -79,9 +80,18 @@ def get_reservations():
 	for companyId in companies:
 		company = companies[companyId]
 
-		if 'reservations' in company:
-			for reservationId in company['reservations']:
-				reservations[reservationId] = {'reservation': company['reservations'][reservationId], 'company': company}
+		if 'rooms' in company:
+			for roomId in company['rooms']:
+				room = company['rooms'][roomId]
+				reservations = {}
+
+				if 'reservations' in room:
+					reservations = room['reservations']
+
+					del room['reservations']
+
+					for reservationId in reservations:
+						reservations[reservationId] = {'reservation': reservations[reservationId], 'company': company, 'room': room}
 
 	return reservations
 def save_conversation(chat_id, msg):
@@ -190,7 +200,55 @@ def ai_request_handler(request):
 	return returnValue
 
 def save_feedback_message(user, company, msg, conversation):
-	db.post('companies/' + conversation['last_data']['company']['id'] + '/reservations/' + str(conversation['last_data']['reservation_id']) + '/feedback', msg)
+	db.post('companies/' + conversation['last_data']['company']['id'] + '/rooms/' + conversation['last_data']['room']['id'] + '/reservations/' + str(conversation['last_data']['reservation_id']) + '/feedback', msg)
+
+def checkRoomAvailability(room, start_time, end_time):
+
+	if 'reservations' not in room:  # if there are no reservations, the room is always available
+		return True
+
+	start_time_date_time = datetime.datetime.strptime(start_time, '%H:%M:%S').time()
+	end_time_date_time = datetime.datetime.strptime(end_time, '%H:%M:%S').time()
+
+	for reservationId in room['reservations']:
+		reservation = room['reservations'][reservationId]
+
+		reservation_start_time_date_time = datetime.datetime.strptime(reservation['start_time'], '%H:%M:%S').time()
+		reservation_end_time_date_time = datetime.datetime.strptime(reservation['end_time'], '%H:%M:%S').time()
+
+		if reservation_start_time_date_time > start_time_date_time and reservation_end_time_date_time < start_time_date_time:
+			return False
+		if reservation_start_time_date_time < end_time_date_time and reservation_end_time_date_time > end_time_date_time:
+			return False
+
+	return True
+def getAvailableRoom(conversation, user, company, start_time, end_time):
+
+	available_rooms = {}
+	default_room_id = None
+
+	if 'rooms' in company:
+		for roomId in company['rooms']:
+			room = company['rooms'][roomId]
+
+			if checkRoomAvailability(room, start_time, end_time):
+				available_rooms[roomId] = room
+				if room['default'] == '1':
+					default_room_id = roomId
+				print("BESCHIKBAAR " + room['name'])
+			else:
+				print("NIET BESCHIKBAAR " + room['name'])
+
+	if default_room_id is not None:
+		return available_rooms[default_room_id]
+
+	if len(available_rooms) > 0:
+		keys = list(available_rooms.keys())
+		random.shuffle(keys)
+
+		return available_rooms[keys[0]]
+
+	return None
 
 def ai_handler(user, company, msg, conversation):
 	if 'last_data' in conversation:
@@ -225,6 +283,7 @@ def ai_handler(user, company, msg, conversation):
 	if formatted['action'] == "Reserveren":
 		start_time = None
 		end_time = None
+		room = None
 
 		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '' and formatted['params']['begin_tijd']:
 			start_time = formatted['params']['begin_tijd']
@@ -232,8 +291,15 @@ def ai_handler(user, company, msg, conversation):
 			end_time = formatted['params']['eind_tijd']
 
 		if start_time is not None and end_time is not None:
-			db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'reservation', 'start_time': start_time, 'end_time': end_time})
-			bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Starttijd:  " + start_time + " \n Eindtijd:  " + end_time + " \n Kamer:  -")
+			if 'Kamer' not in formatted['params'] or ('Kamer' in formatted['params'] and formatted['params']['Kamer'] == ''):
+				room = getAvailableRoom(conversation, user, company, start_time, end_time)
+
+			if room is None:
+				bot.sendMessage(msg['chat']['id'], "Geen ruimte beschikbaar.")
+			else:
+				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'reservation', 'start_time': start_time, 'end_time': end_time, 'room': room})
+				bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Starttijd:  " + start_time + " \n Eindtijd:  " + end_time + " \n Kamer:  " + room['name'])
+
 			postMessage = False # don't post the AI message, we only want to send the confirmation
 
 	elif formatted['action'] == "JaNeeVraag":
@@ -250,8 +316,12 @@ def ai_handler(user, company, msg, conversation):
 						start_time = lastData['start_time']
 						end_time = lastData['end_time']
 
-						db.post('companies/' + company['id'] + '/reservations', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': time.strftime('%Y-%m-%d'), 'created': str(date), 'chat_id': msg['chat']['id'], 'reminder_sent': 0, 'feedback_sent': 0, 'canceled': 0})
-						bot.sendMessage(msg['chat']['id'], "De reservering staat genoteerd.")
+						room_availability = checkRoomAvailability(lastData['room'], start_time, end_time)
+						if room_availability is False:
+							bot.sendMessage(msg['chat']['id'], "Helaas is deze ruimte niet meer beschikbaar om deze tijd.")
+						else:
+							db.post('companies/' + company['id'] + '/rooms/' + lastData['room']['id'] + '/reservations', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': time.strftime('%Y-%m-%d'), 'created': str(date), 'chat_id': msg['chat']['id'], 'room_id': lastData['room']['id'], 'reminder_sent': 0, 'feedback_sent': 0, 'canceled': 0})
+							bot.sendMessage(msg['chat']['id'], "De reservering staat genoteerd.")
 					else:
 						bot.sendMessage(msg['chat']['id'], "De reservering is geannuleerd.")
 
@@ -259,7 +329,7 @@ def ai_handler(user, company, msg, conversation):
 					if formatted['params']['JaOfNee'] == 'Ja':
 						bot.sendMessage(msg['chat']['id'], "👍🏻")
 					else:
-						db.put('companies/' + lastData['company']['id'] + '/reservations/' + lastData['reservation_id'], 'canceled', 1)
+						db.put('companies/' + lastData['company']['id'] + '/rooms/' + lastData['room']['id'] + '/reservations/' + lastData['reservation_id'], 'canceled', 1)
 						bot.sendMessage(msg['chat']['id'], "De reservering is geannuleerd.")
 
 				db.delete('/conversations/' + str(conversation['chat_id']), 'last_data') # delete last_data after processing
@@ -301,10 +371,10 @@ def notify_starting_reservations():
 					startMinutes = '0' + str(startMinutes)
 
 				bot.sendMessage(reservation['reservation']['chat_id'], "Uw afspraak begint zometeen om " + str(startHours) + ":" + str(startMinutes) + ", gaat deze afspraak nog door?")
-				db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'reminder_sent', 1)
+				db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservationId, 'reminder_sent', 1)
 
 				conversation = get_conversation(reservation['reservation']['chat_id'])
-				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'confirm_reservation', 'reservation_id': reservationId, 'company': reservation['company']})
+				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'confirm_reservation', 'reservation_id': reservationId, 'company': reservation['company'], 'room': reservation['room']})
 
 				print("reminder sent")
 def notify_feedback_reservations():
@@ -328,10 +398,10 @@ def notify_feedback_reservations():
 
 				if nowTime >= reservationTime:
 					bot.sendMessage(reservation['reservation']['chat_id'], "U heeft zojuist gebruik gemaakt van een ruimte, hoe is deze u bevallen?")
-					db.put('companies/' + reservation['company']['id'] + '/reservations/' + reservationId, 'feedback_sent', 1)
+					db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservationId, 'feedback_sent', 1)
 
 					conversation = get_conversation(reservation['reservation']['chat_id'])
-					db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'feedback', 'reservation_id': reservationId, 'company': reservation['company']})
+					db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'feedback', 'reservation_id': reservationId, 'company': reservation['company'], 'room': reservation['room']})
 
 def get_conversations():
 	return db.get('conversations', None)
