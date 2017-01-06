@@ -266,7 +266,7 @@ def cancel_reservation(conversation, date, time):
 		if reservation['reservation']['date'] != date:
 			continue # not the reservation from params
 
-		if startTime.time() < datetime.datetime.time():
+		if startTime.time() < datetime.datetime.now().time():
 			continue # reservation already started
 
 		reservationDeleteTime = datetime.datetime.strptime(time, '%H:%M:%S')
