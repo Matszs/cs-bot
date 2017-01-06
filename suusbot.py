@@ -282,6 +282,16 @@ def cancel_reservation(conversation, date, time):
 			print("[DEBUG] Cancel -> 3")
 			continue # reservation is before given time
 
+		print(endTime)
+		print(reservationDeleteTime)
+
+		print("------------")
+		print(endTime.timestamp())
+		print(reservationDeleteTime.timestamp())
+		print("------------")
+		print("------------")
+		print("------------")
+
 		if endTime.timestamp() < reservationDeleteTime.timestamp():
 			print("[DEBUG] Cancel -> 4")
 			continue # reservation is after given time
