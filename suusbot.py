@@ -316,7 +316,7 @@ def ai_handler(user, company, msg, conversation):
 		start_time = None
 		end_time = None
 		room = None
-		date = time.strftime('%Y-%m-%d')
+		date = datetime.datetime.now().strftime('%Y-%m-%d')
 
 		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '' and formatted['params']['begin_tijd']:
 			start_time = formatted['params']['begin_tijd']
