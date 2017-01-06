@@ -257,11 +257,11 @@ def cancel_reservation(conversation, date, time):
 		reservation = reservations[reservationId]
 
 		if reservation['reservation']['canceled']:
-			print("[DEBUG] Cancel -> 6")
+			print("[DEBUG][" + reservationId + "] Cancel -> 6")
 			continue # reservation is already canceled.
 
 		if reservation['reservation']['chat_id'] != conversation['chat_id']:
-			print("[DEBUG] Cancel -> 5")
+			print("[DEBUG][" + reservationId + "] Cancel -> 5")
 			continue # reservation not created by this conversation
 
 		startTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['start_time'], '%Y-%m-%d %H:%M:%S')
@@ -269,17 +269,17 @@ def cancel_reservation(conversation, date, time):
 
 
 		if reservation['reservation']['date'] != date:
-			print("[DEBUG] Cancel -> 1")
+			print("[DEBUG][" + reservationId + "] Cancel -> 1")
 			continue # not the reservation from params
 
 		if startTime.timestamp() < datetime.datetime.now().timestamp():
-			print("[DEBUG] Cancel -> 2")
+			print("[DEBUG][" + reservationId + "] Cancel -> 2")
 			continue # reservation already started
 
 		reservationDeleteTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + time, '%Y-%m-%d %H:%M:%S')
 
 		if startTime.timestamp() > reservationDeleteTime.timestamp():
-			print("[DEBUG] Cancel -> 3")
+			print("[DEBUG][" + reservationId + "] Cancel -> 3")
 			continue # reservation is before given time
 
 		print(endTime)
@@ -293,7 +293,7 @@ def cancel_reservation(conversation, date, time):
 		print("------------")
 
 		if endTime.timestamp() < reservationDeleteTime.timestamp():
-			print("[DEBUG] Cancel -> 4")
+			print("[DEBUG][" + reservationId + "] Cancel -> 4")
 			continue # reservation is after given time
 
 		# put canceled on 1
