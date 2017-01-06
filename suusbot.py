@@ -204,14 +204,16 @@ def checkRoomAvailability(room, start_time, end_time):
 	if 'reservations' not in room:  # if there are no reservations, the room is always available
 		return True
 
-	start_time_date_time = datetime.datetime.strptime(start_time, '%H:%M:%S').timestamp()
-	end_time_date_time = datetime.datetime.strptime(end_time, '%H:%M:%S').timestamp()
+	date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+	start_time_date_time = datetime.datetime.strptime(date + " " + start_time, '%Y-%m-%d %H:%M:%S').timestamp()
+	end_time_date_time = datetime.datetime.strptime(date + " " + end_time, '%Y-%m-%d %H:%M:%S').timestamp()
 
 	for reservationId in room['reservations']:
 		reservation = room['reservations'][reservationId]
 
-		reservation_start_time_date_time = datetime.datetime.strptime(reservation['start_time'], '%H:%M:%S').timestamp()
-		reservation_end_time_date_time = datetime.datetime.strptime(reservation['end_time'], '%H:%M:%S').timestamp()
+		reservation_start_time_date_time = datetime.datetime.strptime(date + " " + reservation['start_time'], '%Y-%m-%d %H:%M:%S').timestamp()
+		reservation_end_time_date_time = datetime.datetime.strptime(date + " " + reservation['end_time'], '%Y-%m-%d %H:%M:%S').timestamp()
 
 		if reservation_start_time_date_time > start_time_date_time and reservation_end_time_date_time < start_time_date_time:
 			return False
@@ -262,8 +264,8 @@ def cancel_reservation(conversation, date, time):
 			print("[DEBUG] Cancel -> 5")
 			continue # reservation not created by this conversation
 
-		startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
-		endTime = datetime.datetime.strptime(reservation['reservation']['end_time'], '%H:%M:%S')
+		startTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['start_time'], '%Y-%m-%d %H:%M:%S')
+		endTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S')
 
 		if reservation['reservation']['date'] != date:
 			print("[DEBUG] Cancel -> 1")
@@ -273,7 +275,7 @@ def cancel_reservation(conversation, date, time):
 			print("[DEBUG] Cancel -> 2")
 			continue # reservation already started
 
-		reservationDeleteTime = datetime.datetime.strptime(time, '%H:%M:%S')
+		reservationDeleteTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + time, '%Y-%m-%d %H:%M:%S')
 
 		if startTime.timestamp() > reservationDeleteTime.timestamp():
 			print("[DEBUG] Cancel -> 3")
@@ -416,12 +418,12 @@ def notify_starting_reservations():
 
 		if dateFormatted.date() == datetime.date.today(): # check if reservations is for today
 
-			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S') - datetime.timedelta(minutes=30)
-			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
+			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S') - datetime.timedelta(minutes=30)
+			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S')
 
 			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
 
-			if datetime.datetime.now().timestamp() >= startTimeMargeStart.timestamp():
+			if datetime.datetime.now().timestamp() >= startTimeMargeStart.timestamp() and datetime.datetime.now().timestamp() < startTimeMargeEnd.timestamp():
 
 				startHours = startTime.hour
 				startMinutes = startTime.minute
