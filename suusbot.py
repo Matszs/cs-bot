@@ -418,8 +418,8 @@ def notify_starting_reservations():
 
 		if dateFormatted.date() == datetime.date.today(): # check if reservations is for today
 
-			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S') - datetime.timedelta(minutes=30)
-			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S')
+			startTimeMargeStart = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['start_time'], '%Y-%m-%d %H:%M:%S') - datetime.timedelta(minutes=30)
+			startTimeMargeEnd = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['start_time'], '%Y-%m-%d %H:%M:%S')
 
 			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
 
