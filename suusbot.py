@@ -74,7 +74,7 @@ def get_company_by_code(code):
 
 	return False
 def get_reservations():
-	reservations = {}
+	reservationsAll = {}
 	companies = db.get('companies', None)
 
 	for companyId in companies:
@@ -91,9 +91,9 @@ def get_reservations():
 					del room['reservations']
 
 					for reservationId in reservations:
-						reservations[reservationId] = {'reservation': reservations[reservationId], 'company': company, 'room': room}
+						reservationsAll[reservationId] = {'reservation': reservations[reservationId], 'company': company, 'room': room}
 
-	return reservations
+	return reservationsAll
 def save_conversation(chat_id, msg):
 	conversation = {'chat_id': chat_id}
 	conversation['chat'] = msg['chat']
@@ -204,14 +204,14 @@ def checkRoomAvailability(room, start_time, end_time):
 	if 'reservations' not in room:  # if there are no reservations, the room is always available
 		return True
 
-	start_time_date_time = datetime.datetime.strptime(start_time, '%H:%M:%S').time()
-	end_time_date_time = datetime.datetime.strptime(end_time, '%H:%M:%S').time()
+	start_time_date_time = datetime.datetime.strptime(start_time, '%H:%M:%S').timestamp()
+	end_time_date_time = datetime.datetime.strptime(end_time, '%H:%M:%S').timestamp()
 
 	for reservationId in room['reservations']:
 		reservation = room['reservations'][reservationId]
 
-		reservation_start_time_date_time = datetime.datetime.strptime(reservation['start_time'], '%H:%M:%S').time()
-		reservation_end_time_date_time = datetime.datetime.strptime(reservation['end_time'], '%H:%M:%S').time()
+		reservation_start_time_date_time = datetime.datetime.strptime(reservation['start_time'], '%H:%M:%S').timestamp()
+		reservation_end_time_date_time = datetime.datetime.strptime(reservation['end_time'], '%H:%M:%S').timestamp()
 
 		if reservation_start_time_date_time > start_time_date_time and reservation_end_time_date_time < start_time_date_time:
 			return False
@@ -269,21 +269,21 @@ def cancel_reservation(conversation, date, time):
 			print("[DEBUG] Cancel -> 1")
 			continue # not the reservation from params
 
-		if startTime.time() < datetime.datetime.now().time():
+		if startTime.timestamp() < datetime.datetime.now().timestamp():
 			print("[DEBUG] Cancel -> 2")
 			continue # reservation already started
 
 		reservationDeleteTime = datetime.datetime.strptime(time, '%H:%M:%S')
 
-		if startTime.time() < reservationDeleteTime.time():
+		if startTime.timestamp() > reservationDeleteTime.timestamp():
 			print("[DEBUG] Cancel -> 3")
 			continue # reservation is before given time
-		if endTime.time() > reservationDeleteTime.time():
+		if endTime.timestamp() > reservationDeleteTime.timestamp():
 			print("[DEBUG] Cancel -> 4")
 			continue # reservation is after given time
 
 		# put canceled on 1
-		db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservation['reservation']['reservation_id'], 'canceled', 1)
+		db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservationId, 'canceled', 1)
 
 		return True
 	return False
@@ -296,7 +296,7 @@ def ai_handler(user, company, msg, conversation):
 				if 'first_message_time' in conversation['last_data']:
 					message_time = datetime.datetime.strptime(conversation['last_data']['first_message_time'], '%Y-%m-%d %H:%M:%S')
 
-					if datetime.datetime.now().time() > (message_time + datetime.timedelta(seconds=30)).time():
+					if datetime.datetime.now().timestamp() > (message_time + datetime.timedelta(seconds=30)).timestamp():
 						db.delete('/conversations/' + str(conversation['chat_id']), 'last_data')  # delete last_data after processing
 						save_feedback_message(user, company, msg, conversation)
 						bot.sendMessage(msg['chat']['id'], "Bedankt voor uw feedback.")
@@ -421,8 +421,7 @@ def notify_starting_reservations():
 
 			startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
 
-
-			if (datetime.datetime.now().hour == startTimeMargeStart.hour and datetime.datetime.now().minute >= startTimeMargeStart.minute) or (datetime.datetime.now().hour == startTimeMargeEnd.hour and datetime.datetime.now().minute <= startTimeMargeEnd.minute):
+			if datetime.datetime.now().timestamp() >= startTimeMargeStart.timestamp():
 
 				startHours = startTime.hour
 				startMinutes = startTime.minute
@@ -456,12 +455,10 @@ def notify_feedback_reservations():
 
 			if date_formatted.date() == datetime.date.today(): # yes if the reservations ends 00:00 it won't work
 
-				end_time_offset = datetime.datetime.strptime(reservation['reservation']['end_time'], '%H:%M:%S') + datetime.timedelta(minutes=30)
+				end_time_offset = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S') + datetime.timedelta(minutes=30)
 
-				nowTime = datetime.datetime.now().hour * 60 + datetime.datetime.now().minute
-				reservationTime = end_time_offset.hour * 60 + end_time_offset.minute
+				if datetime.datetime.now().timestamp() >= end_time_offset.timestamp():
 
-				if nowTime >= reservationTime:
 					bot.sendMessage(reservation['reservation']['chat_id'], "U heeft zojuist gebruik gemaakt van een ruimte, hoe is deze u bevallen?")
 					db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservationId, 'feedback_sent', 1)
 
@@ -482,7 +479,7 @@ def notify_feedback_ended():
 					if 'first_message_time' in conversation['last_data']:
 						message_time = datetime.datetime.strptime(conversation['last_data']['first_message_time'], '%Y-%m-%d %H:%M:%S')
 
-						if datetime.datetime.now().time() > (message_time + datetime.timedelta(seconds=30)).time():
+						if datetime.datetime.now().timestamp() > (message_time + datetime.timedelta(seconds=30)).timestamp():
 							db.delete('/conversations/' + str(conversation['chat_id']), 'last_data')  # delete last_data after processing
 							bot.sendMessage(conversation['chat_id'], "Bedankt voor uw feedback.")
 							print("STOP FEEDBACK")
