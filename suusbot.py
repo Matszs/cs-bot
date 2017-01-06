@@ -23,27 +23,27 @@ class STATES:
 db = firebase.FirebaseApplication(FIREBASE_DB, None)
 
 def message_reveiver(msg):
-	user = get_user(msg['from'])
+	user = get_user(msg['from']) # get user from db
 	if user is False:
-		user = save_user(msg['from'])
+		user = save_user(msg['from']) # if it is a new user we create a profile
 
-	conversation = get_conversation(msg['chat']['id'])
+	conversation = get_conversation(msg['chat']['id']) # get conversation from db
 	if conversation is False:
-		conversation = save_conversation(msg['chat']['id'], msg)
+		conversation = save_conversation(msg['chat']['id'], msg) # if it is a new conversation we create a profile
 
-	insert = db.post('conversations/' + str(conversation['chat_id']) + '/messages', msg)
+	insert = db.post('conversations/' + str(conversation['chat_id']) + '/messages', msg) # save all the messages
 
 	# get connected company
-	company = company_by_user(msg['from'])
+	company = company_by_user(msg['from']) # get the company which the user is connected to
 	if company is False:
-		start_conversation('NO_COMPANY', msg, user, conversation)
+		start_conversation('NO_COMPANY', msg, user, conversation) # if the user isn't connected to a company we arrange that first.
 		return
 
 	if conversation['state'] == STATES.TUTORIAL:
-		start_conversation('TUTORIAL', msg, user, conversation)
+		start_conversation('TUTORIAL', msg, user, conversation) # the user first has to follow the tutorial before he can start using the bot
 		return
 
-	ai_handler(user, company, msg, conversation)
+	ai_handler(user, company, msg, conversation) # all other situations are handled by the AI.
 
 def company_by_user(user):
 	companies = db.get('companies', None)
@@ -97,7 +97,7 @@ def get_reservations():
 def save_conversation(chat_id, msg):
 	conversation = {'chat_id': chat_id}
 	conversation['chat'] = msg['chat']
-	conversation['state'] = STATES.NEW_USER
+	conversation['state'] = STATES.NEW_USER # default value when adding new conversation to the db
 
 	conversationDb = db.put('conversations', str(chat_id), conversation)
 	return conversationDb
@@ -112,6 +112,7 @@ def get_conversation(chat_id, include_messages = False):
 
 	return conversationDb
 
+# this method handles a few 'basic' situations, like when the user isn't connected to company or has to follow the tutorial
 def start_conversation(type, msg, user, conversation):
 
 	if type == 'NO_COMPANY':
@@ -179,14 +180,10 @@ def start_conversation(type, msg, user, conversation):
 def ai_request(conversation, text):
 	request = ai.text_request()
 	request.lang = 'nl'
-	request.session_id = conversation['chat_id']
+	request.session_id = conversation['chat_id'] # conversation id instead of user id so everybody in the conversation can answer questions.
 	request.query = text
 	return json.loads(request.getresponse().read().decode('utf_8'))
 def ai_request_handler(request):
-	# todo: get action, params and extract everything, making sure json is always the same
-
-	#print(request) # DEBUG
-
 	returnValue = {'action': None, 'message': '', 'params': []}
 
 	if request['status']['code'] == 200:
@@ -250,6 +247,41 @@ def getAvailableRoom(conversation, user, company, start_time, end_time):
 
 	return None
 
+def cancel_reservation(conversation, date, time):
+
+	reservations = get_reservations()
+
+	for reservationId in reservations:
+		reservation = reservations[reservationId]
+
+		if reservation['reservation']['canceled']:
+			continue # reservation is already canceled.
+
+		if reservation['reservation']['chat_id'] != conversation['chat_id']:
+			continue # reservation not created by this conversation
+
+		startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
+		endTime = datetime.datetime.strptime(reservation['reservation']['end_time'], '%H:%M:%S')
+
+		if reservation['reservation']['date'] != date:
+			continue # not the reservation from params
+
+		if startTime.time() < datetime.datetime.time():
+			continue # reservation already started
+
+		reservationDeleteTime = datetime.datetime.strptime(time, '%H:%M:%S')
+
+		if startTime.time() < reservationDeleteTime.time():
+			continue # reservation is before given time
+		if endTime.time() > reservationDeleteTime.time():
+			continue # reservation is after given time
+
+		# put canceled on 1
+		db.put('companies/' + reservation['company']['id'] + '/rooms/' + reservation['room']['id'] + '/reservations/' + reservation['reservation']['reservation_id'], 'canceled', 1)
+
+		return True
+	return False
+
 def ai_handler(user, company, msg, conversation):
 	if 'last_data' in conversation:
 		if 'type' in conversation['last_data']:
@@ -284,6 +316,7 @@ def ai_handler(user, company, msg, conversation):
 		start_time = None
 		end_time = None
 		room = None
+		date = time.strftime('%Y-%m-%d')
 
 		if 'begin_tijd' in formatted['params'] and formatted['params']['begin_tijd'] is not '' and formatted['params']['begin_tijd']:
 			start_time = formatted['params']['begin_tijd']
@@ -294,13 +327,35 @@ def ai_handler(user, company, msg, conversation):
 			if 'Kamer' not in formatted['params'] or ('Kamer' in formatted['params'] and formatted['params']['Kamer'] == ''):
 				room = getAvailableRoom(conversation, user, company, start_time, end_time)
 
+			if 'date' in formatted['params']:
+				date = formatted['params']['date']
+
 			if room is None:
 				bot.sendMessage(msg['chat']['id'], "Geen ruimte beschikbaar.")
 			else:
-				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'reservation', 'start_time': start_time, 'end_time': end_time, 'room': room})
+				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'reservation', 'start_time': start_time, 'end_time': end_time, 'room': room, 'date': date})
 				bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Starttijd:  " + start_time + " \n Eindtijd:  " + end_time + " \n Kamer:  " + room['name'])
 
 			postMessage = False # don't post the AI message, we only want to send the confirmation
+
+	if formatted['action'] == "Verwijderen":
+
+		date = None
+		time = None
+
+		if 'datum' in formatted['params'] and formatted['params']['datum'] is not '' and formatted['params']['datum']:
+			date = formatted['params']['datum']
+		if 'tijd' in formatted['params'] and formatted['params']['tijd'] is not '' and formatted['params']['tijd']:
+			time = formatted['params']['tijd']
+
+
+		if date is not None and time is not None:
+			if cancel_reservation(conversation, date, time):
+				bot.sendMessage(msg['chat']['id'], "De reservering is succesvol geannuleerd.")
+			else:
+				bot.sendMessage(msg['chat']['id'], "Er is geen reservering gevonden voor deze tijd")
+
+			postMessage = False  # don't post the AI message, we only want to send the confirmation
 
 	elif formatted['action'] == "JaNeeVraag":
 
@@ -320,7 +375,7 @@ def ai_handler(user, company, msg, conversation):
 						if room_availability is False:
 							bot.sendMessage(msg['chat']['id'], "Helaas is deze ruimte niet meer beschikbaar om deze tijd.")
 						else:
-							db.post('companies/' + company['id'] + '/rooms/' + lastData['room']['id'] + '/reservations', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': time.strftime('%Y-%m-%d'), 'created': str(date), 'chat_id': msg['chat']['id'], 'room_id': lastData['room']['id'], 'reminder_sent': 0, 'feedback_sent': 0, 'canceled': 0})
+							db.post('companies/' + company['id'] + '/rooms/' + lastData['room']['id'] + '/reservations', {'start_time': start_time, 'end_time': end_time, 'user': user['id'], 'date': lastData['date'], 'created': str(date), 'chat_id': msg['chat']['id'], 'room_id': lastData['room']['id'], 'reminder_sent': 0, 'feedback_sent': 0, 'canceled': 0})
 							bot.sendMessage(msg['chat']['id'], "De reservering staat genoteerd.")
 					else:
 						bot.sendMessage(msg['chat']['id'], "De reservering is geannuleerd.")
@@ -347,6 +402,8 @@ def notify_starting_reservations():
 		reservation = reservations[reservationId]
 
 		if reservation['reservation']['reminder_sent']:
+			continue
+		if reservation['reservation']['canceled']:
 			continue
 
 		dateFormatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
@@ -385,6 +442,8 @@ def notify_feedback_reservations():
 
 		if 'feedback_sent' in reservation['reservation']:
 			if reservation['reservation']['feedback_sent']:
+				continue
+			if reservation['reservation']['canceled']:
 				continue
 
 			date_formatted = datetime.datetime.strptime(reservation['reservation']['date'], "%Y-%m-%d")
@@ -425,8 +484,6 @@ def notify_feedback_ended():
 def timely_events():
 
 	while True:
-
-		#todo: if reservation is canceled, stop asking for feedback
 
 		print("> TimeEvents Trigger")
 		notify_starting_reservations()
