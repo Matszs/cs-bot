@@ -255,25 +255,31 @@ def cancel_reservation(conversation, date, time):
 		reservation = reservations[reservationId]
 
 		if reservation['reservation']['canceled']:
+			print("[DEBUG] Cancel -> 6")
 			continue # reservation is already canceled.
 
 		if reservation['reservation']['chat_id'] != conversation['chat_id']:
+			print("[DEBUG] Cancel -> 5")
 			continue # reservation not created by this conversation
 
 		startTime = datetime.datetime.strptime(reservation['reservation']['start_time'], '%H:%M:%S')
 		endTime = datetime.datetime.strptime(reservation['reservation']['end_time'], '%H:%M:%S')
 
 		if reservation['reservation']['date'] != date:
+			print("[DEBUG] Cancel -> 1")
 			continue # not the reservation from params
 
 		if startTime.time() < datetime.datetime.now().time():
+			print("[DEBUG] Cancel -> 2")
 			continue # reservation already started
 
 		reservationDeleteTime = datetime.datetime.strptime(time, '%H:%M:%S')
 
 		if startTime.time() < reservationDeleteTime.time():
+			print("[DEBUG] Cancel -> 3")
 			continue # reservation is before given time
 		if endTime.time() > reservationDeleteTime.time():
+			print("[DEBUG] Cancel -> 4")
 			continue # reservation is after given time
 
 		# put canceled on 1
@@ -327,7 +333,7 @@ def ai_handler(user, company, msg, conversation):
 			if 'Kamer' not in formatted['params'] or ('Kamer' in formatted['params'] and formatted['params']['Kamer'] == ''):
 				room = getAvailableRoom(conversation, user, company, start_time, end_time)
 
-			if 'date' in formatted['params']:
+			if 'date' in formatted['params'] and formatted['params']['date'] is not '' and formatted['params']['date']:
 				date = formatted['params']['date']
 
 			if room is None:
