@@ -267,8 +267,6 @@ def cancel_reservation(conversation, date, time):
 		startTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['start_time'], '%Y-%m-%d %H:%M:%S')
 		endTime = datetime.datetime.strptime(reservation['reservation']['date'] + " " + reservation['reservation']['end_time'], '%Y-%m-%d %H:%M:%S')
 
-		print(reservation['reservation']['date'] + " => " + date)
-
 		if reservation['reservation']['date'] != date:
 			print("[DEBUG][" + reservationId + "] Cancel -> 1")
 			continue # not the reservation from params
@@ -282,16 +280,6 @@ def cancel_reservation(conversation, date, time):
 		if startTime.timestamp() > reservationDeleteTime.timestamp():
 			print("[DEBUG][" + reservationId + "] Cancel -> 3")
 			continue # reservation is before given time
-
-		print(endTime)
-		print(reservationDeleteTime)
-
-		print("------------")
-		print(endTime.timestamp())
-		print(reservationDeleteTime.timestamp())
-		print("------------")
-		print("------------")
-		print("------------")
 
 		if endTime.timestamp() < reservationDeleteTime.timestamp():
 			print("[DEBUG][" + reservationId + "] Cancel -> 4")
