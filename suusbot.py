@@ -7,6 +7,7 @@ import apiai
 import json
 import datetime
 import random
+import re
 
 APITOKEN = "262947791:AAFApOcx33pmIFnho6JbpQnuFZicQgWDhQs" # Telegram token
 #AI_CLIENT_ACCESS_TOKEN = "900740f8620f4a9897fad1adc5b8c7dc"
@@ -43,7 +44,30 @@ def message_reveiver(msg):
 		start_conversation('TUTORIAL', msg, user, conversation) # the user first has to follow the tutorial before he can start using the bot
 		return
 
+	if command_handler(user, company, msg, conversation):
+		return
+
 	ai_handler(user, company, msg, conversation) # all other situations are handled by the AI.
+
+
+def command_handler(user, company, msg, conversation):
+	if 'last_data' in conversation:
+		if 'type' in conversation['last_data']:
+			if conversation['last_data']['type'] == 'reservation':
+
+				if re.search(r'kamer', msg['text'], re.I):
+					for roomId in company['rooms']:
+						room = company['rooms'][roomId]
+
+						if re.search(room['name'], msg['text'], re.I):
+							if checkRoomAvailability(room, conversation['last_data']['start_time'], conversation['last_data']['end_time']):
+								db.put('/conversations/' + str(conversation['chat_id']) + '/last_data', 'room', room)
+								bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Datum:  " + conversation['last_data']['date'] + " \n Starttijd:  " + conversation['last_data']['start_time'] + " \n Eindtijd:  " + conversation['last_data']['end_time'] + " \n Kamer:  " + room['name'])
+							else:
+								bot.sendMessage(msg['chat']['id'], "Helaas is deze ruimte niet beschikbaar om deze tijd.")
+							return True
+
+	return False
 
 def company_by_user(user):
 	companies = db.get('companies', None)
@@ -343,7 +367,7 @@ def ai_handler(user, company, msg, conversation):
 				bot.sendMessage(msg['chat']['id'], "Geen ruimte beschikbaar.")
 			else:
 				db.put('/conversations/' + str(conversation['chat_id']), 'last_data', {'type': 'reservation', 'start_time': start_time, 'end_time': end_time, 'room': room, 'date': date})
-				bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Starttijd:  " + start_time + " \n Eindtijd:  " + end_time + " \n Kamer:  " + room['name'])
+				bot.sendMessage(msg['chat']['id'], "Weet u zeker dat u een kamer wilt reserveren voor het volgende: \n\n Datum:  " + date + " \n Starttijd:  " + start_time + " \n Eindtijd:  " + end_time + " \n Kamer:  " + room['name'])
 
 			postMessage = False # don't post the AI message, we only want to send the confirmation
 
