@@ -228,16 +228,16 @@ def checkRoomAvailability(room, start_time, end_time):
 	if 'reservations' not in room:  # if there are no reservations, the room is always available
 		return True
 
-	date = datetime.datetime.now().strftime("%Y-%m-%d")
+	dateString = datetime.datetime.now().strftime("%Y-%m-%d")
 
-	start_time_date_time = datetime.datetime.strptime(date + " " + start_time, '%Y-%m-%d %H:%M:%S').timestamp()
-	end_time_date_time = datetime.datetime.strptime(date + " " + end_time, '%Y-%m-%d %H:%M:%S').timestamp()
+	start_time_date_time = datetime.datetime.strptime(dateString + " " + start_time, '%Y-%m-%d %H:%M:%S').timestamp()
+	end_time_date_time = datetime.datetime.strptime(dateString + " " + end_time, '%Y-%m-%d %H:%M:%S').timestamp()
 
 	for reservationId in room['reservations']:
 		reservation = room['reservations'][reservationId]
 
-		reservation_start_time_date_time = datetime.datetime.strptime(date + " " + reservation['start_time'], '%Y-%m-%d %H:%M:%S').timestamp()
-		reservation_end_time_date_time = datetime.datetime.strptime(date + " " + reservation['end_time'], '%Y-%m-%d %H:%M:%S').timestamp()
+		reservation_start_time_date_time = datetime.datetime.strptime(dateString + " " + reservation['start_time'], '%Y-%m-%d %H:%M:%S').timestamp()
+		reservation_end_time_date_time = datetime.datetime.strptime(dateString + " " + reservation['end_time'], '%Y-%m-%d %H:%M:%S').timestamp()
 
 		if reservation_start_time_date_time > start_time_date_time and reservation_end_time_date_time < start_time_date_time:
 			return False
