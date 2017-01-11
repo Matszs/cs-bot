@@ -32,10 +32,15 @@ def message_reveiver(msg):
 	if conversation is False:
 		conversation = save_conversation(msg['chat']['id'], msg) # if it is a new conversation we create a profile
 
+	company = company_by_user(msg['from'])  # get the company which the user is connected to
+
+	if 'emoji_demo' in company and company['emoji_demo']:
+		emoji_handler(user, company, msg, conversation)
+		return
+
 	insert = db.post('conversations/' + str(conversation['chat_id']) + '/messages', msg) # save all the messages
 
 	# get connected company
-	company = company_by_user(msg['from']) # get the company which the user is connected to
 	if company is False:
 		start_conversation('NO_COMPANY', msg, user, conversation) # if the user isn't connected to a company we arrange that first.
 		return
@@ -49,6 +54,19 @@ def message_reveiver(msg):
 
 	ai_handler(user, company, msg, conversation) # all other situations are handled by the AI.
 
+def emoji_handler(user, company, msg, conversation):
+	#count = re.match(r'[\U0001f600-\U0001f1fc]', msg['text'])
+
+	if 'text' in msg:
+
+		emojiMatch = re.match(u'['
+		u'\U0001F300-\U0001F5FF'
+		u'\U0001F600-\U0001F64F'
+		u'\U0001F680-\U0001F6FF'
+		u'\u2600-\u26FF\u2700-\u27BF]+', msg['text'])
+
+		if emojiMatch is not None:
+			db.post('emoji_messages', msg)
 
 def command_handler(user, company, msg, conversation):
 	if 'last_data' in conversation:
@@ -66,6 +84,26 @@ def command_handler(user, company, msg, conversation):
 							else:
 								bot.sendMessage(msg['chat']['id'], "Helaas is deze ruimte niet beschikbaar om deze tijd.")
 							return True
+
+	if re.search(r'changecompany', msg['text'], re.I):
+		companyMatches = re.match(r'changecompany (.*)', msg['text'], re.I)
+
+		if companyMatches and companyMatches.group(1):
+
+			newCompany = get_company_by_code(companyMatches.group(1))
+
+			if newCompany is not False:
+				db.delete('/companies/' + company['id'] + '/users', str(user['id']))
+				db.put('companies/' + newCompany['id'] + '/users', str(user['id']), user['id'])
+
+				bot.sendMessage(msg['chat']['id'], "Succesvol veranderd naar " + newCompany['name'])
+			else:
+				bot.sendMessage(msg['chat']['id'], "Bedrijf niet gevonden.")
+		else:
+			bot.sendMessage(msg['chat']['id'], "Format: changecompany CODE")
+
+		return True
+
 
 	return False
 
