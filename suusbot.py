@@ -34,9 +34,10 @@ def message_reveiver(msg):
 
 	company = company_by_user(msg['from'])  # get the company which the user is connected to
 
-	if 'emoji_demo' in company and company['emoji_demo']:
-		emoji_handler(user, company, msg, conversation)
-		return
+	if company is not False:
+		if 'emoji_demo' in company and company['emoji_demo']:
+			emoji_handler(user, company, msg, conversation)
+			return
 
 	insert = db.post('conversations/' + str(conversation['chat_id']) + '/messages', msg) # save all the messages
 
