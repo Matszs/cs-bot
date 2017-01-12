@@ -59,11 +59,11 @@ def emoji_handler(user, company, msg, conversation):
 
 	if 'text' in msg:
 
-		emojiMatch = re.match(u'['
+		emojiMatch = re.match(u'^['
 		u'\U0001F300-\U0001F5FF'
 		u'\U0001F600-\U0001F64F'
 		u'\U0001F680-\U0001F6FF'
-		u'\u2600-\u26FF\u2700-\u27BF]+', msg['text'])
+		u'\u2600-\u26FF\u2700-\u27BF]$', msg['text'])
 
 		if emojiMatch is not None:
 			db.post('emoji_messages', msg)
