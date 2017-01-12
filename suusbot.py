@@ -34,11 +34,6 @@ def message_reveiver(msg):
 
 	company = company_by_user(msg['from'])  # get the company which the user is connected to
 
-	if company is not False:
-		if 'emoji_demo' in company and company['emoji_demo']:
-			emoji_handler(user, company, msg, conversation)
-			return
-
 	insert = db.post('conversations/' + str(conversation['chat_id']) + '/messages', msg) # save all the messages
 
 	# get connected company
@@ -46,11 +41,15 @@ def message_reveiver(msg):
 		start_conversation('NO_COMPANY', msg, user, conversation) # if the user isn't connected to a company we arrange that first.
 		return
 
-	if conversation['state'] == STATES.TUTORIAL:
-		start_conversation('TUTORIAL', msg, user, conversation) # the user first has to follow the tutorial before he can start using the bot
+	if command_handler(user, company, msg, conversation):
 		return
 
-	if command_handler(user, company, msg, conversation):
+	if 'emoji_demo' in company and company['emoji_demo']:
+		emoji_handler(user, company, msg, conversation)
+		return
+
+	if conversation['state'] == STATES.TUTORIAL:
+		start_conversation('TUTORIAL', msg, user, conversation) # the user first has to follow the tutorial before he can start using the bot
 		return
 
 	ai_handler(user, company, msg, conversation) # all other situations are handled by the AI.
